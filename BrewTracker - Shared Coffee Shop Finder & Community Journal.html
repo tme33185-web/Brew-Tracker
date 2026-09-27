@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BrewTracker - Shared US Coffee Finder & Community Journal</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        espresso: {
+                            50: '#FDFBF7',
+                            100: '#FAF5EE',
+                            200: '#F0E5D8',
+                            300: '#DCC3A8',
+                            400: '#B89370',
+                            500: '#8C6239',
+                            600: '#6B4423',
+                            700: '#4A2E16',
+                            800: '#2C1810',
+                            900: '#1A0F0A'
+                        },
+                        amber: {
+                            500: '#D97706',
+                            600: '#B45309'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS & JS (100% Free OpenStreetMap Rendering) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FAF5EE;
+            color: #2C1810;
+        }
+
+        .leaflet-container {
+            font-family: 'Inter', sans-serif;
+            width: 100%;
+            height: 100%;
+            background-color: #f2efe9;
+        }
+
+        .leaflet-tile-pane {
+            filter: contrast(1.02) saturate(1.05);
+        }
+
+        /* Custom Coffee Pin Marker */
+        .custom-coffee-pin {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px !important;
+            height: 38px !important;
+            background: #2C1810;
+            border: 2px solid #D97706;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            cursor: pointer;
+        }
+
+        .custom-coffee-pin:hover {
+            transform: rotate(-45deg) scale(1.18);
+            background: #6B4423;
+        }
+
+        .custom-coffee-pin i {
+            transform: rotate(45deg);
+            color: #FAF5EE;
+            font-size: 15px;
+        }
+
+        .custom-coffee-pin .pin-rating {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #D97706;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 10px;
+            transform: rotate(45deg);
+            border: 1px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        /* Leaflet Popup Styling */
+        .leaflet-popup-content-wrapper {
+            border-radius: 16px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.25);
+            border: 1px solid #E5D8CC;
+        }
+
+        .leaflet-popup-content {
+            margin: 0;
+            width: 270px !important;
+        }
+
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #2C1810;
+            padding: 8px 8px 0 0;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #FAF5EE;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #DCC3A8;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #B89370;
+        }
+
+        .glass-panel {
+            background: rgba(253, 251, 247, 0.94);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .star-rating i {
+            cursor: pointer;
+            transition: transform 0.15s ease, color 0.15s ease;
+        }
+        .star-rating i:hover {
+            transform: scale(1.25);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col antialiased selection:bg-amber-500 selection:text-white">
+
+    <header class="bg-espresso-900 text-espresso-100 px-4 py-3 shadow-md z-30 flex items-center justify-between shrink-0 border-b border-espresso-700">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-inner text-white text-lg font-bold">
+                <i class="fa-solid fa-mug-hot"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="font-serif font-bold text-lg leading-tight tracking-wide text-white">BrewTracker</h1>
+                    <span id="syncStatusBadge" class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Live Sync
+                    </span>
+                </div>
+                <p class="text-xs text-espresso-300 font-light">Shared US Coffee Finder & Community Journal</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2.5">
+            <!-- Stats Summary Badge -->
+            <div class="hidden lg:flex items-center space-x-2 bg-espresso-800 px-3 py-1.5 rounded-xl border border-espresso-700 text-xs text-espresso-200">
+                <span><i class="fa-solid fa-store text-amber-500 mr-1"></i> <strong id="headerShopCount">0</strong> Shops</span>
+                <span class="text-espresso-600">|</span>
+                <span><i class="fa-solid fa-comments text-amber-400 mr-1"></i> <strong id="headerReviewCount">0</strong> Reviews</span>
+            </div>
+
+            <!-- Profile Switcher Button -->
+            <button onclick="openProfileModal()" class="flex items-center space-x-2 bg-espresso-800 hover:bg-espresso-700 px-3 py-1.5 rounded-xl border border-espresso-700 text-xs transition">
+                <span id="userAvatarDisplay" class="text-base">☕</span>
+                <span id="userNameDisplay" class="font-medium text-espresso-200 max-w-[100px] truncate">Coffee Lover</span>
+                <i class="fa-solid fa-user-pen text-[10px] text-amber-400 ml-1"></i>
+            </button>
+
+            <!-- Add Undiscovered Shop Button -->
+            <button onclick="openAddModal()" class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-medium text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-md transition flex items-center space-x-1.5">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span class="hidden sm:inline">Add Shop</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="bg-espresso-50 border-b border-espresso-200 px-4 py-2.5 z-20 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5 shrink-0">
+        
+        <!-- Search Controls Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 flex-1">
+            
+            <!-- SEARCH CONTROL 1: Global US Place / Address Search (Photon API Autocomplete) -->
+            <div class="relative w-full">
+                <div class="relative">
+                    <i class="fa-solid fa-earth-americas absolute left-3 top-1/2 -translate-y-1/2 text-amber-600 text-sm"></i>
+                    <input type="text" id="locationSearchInput" oninput="handleLocationInput(this.value)" placeholder="Search any US address, city, or zip to map..." class="w-full bg-white pl-9 pr-9 py-1.5 text-xs sm:text-sm border border-espresso-200 rounded-xl focus:outline-none focus:border-amber-500 text-espresso-800 placeholder-espresso-400 transition shadow-inner">
+                    
+                    <!-- Loading Spinner for Geocoder -->
+                    <div id="geoSearchSpinner" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-amber-600">
+                        <i class="fa-solid fa-circle-notch animate-spin text-xs"></i>
+                    </div>
+                    
+                    <!-- Clear Location Search Button -->
+                    <button id="clearGeoBtn" onclick="clearLocationSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-espresso-400 hover:text-espresso-700 text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Autocomplete Dropdown Results -->
+                <div id="geoSearchResultsDropdown" class="hidden absolute top-full left-0 right-0 mt-1.5 bg-white border border-espresso-200 rounded-2xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto divide-y divide-espresso-100">
+                    <!-- Dynamic dropdown items rendered here -->
+                </div>
+            </div>
+
+            <!-- SEARCH CONTROL 2: Filter Saved Shops in List & Map -->
+            <div class="relative w-full">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-espresso-400 text-sm"></i>
+                <input type="text" id="savedShopsSearchInput" oninput="handleSavedShopsSearchChange()" placeholder="Filter saved shops by name, city, beverage, or notes..." class="w-full bg-white pl-9 pr-8 py-1.5 text-xs sm:text-sm border border-espresso-200 rounded-xl focus:outline-none focus:border-amber-500 text-espresso-800 placeholder-espresso-400 transition shadow-inner">
+                
+                <button id="clearSavedSearchBtn" onclick="clearSavedShopsSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-espresso-400 hover:text-espresso-700 text-xs">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter & Sorting Dropdowns -->
+        <div class="flex items-center gap-2 justify-between lg:justify-end">
+            <!-- State Filter -->
+            <div class="relative min-w-[125px]">
+                <select id="stateSelect" onchange="handleSavedShopsSearchChange()" class="w-full bg-white border border-espresso-200 text-espresso-800 text-xs rounded-xl py-1.5 px-2.5 pr-7 focus:outline-none focus:border-amber-500 cursor-pointer appearance-none shadow-xs font-medium">
+                    <option value="ALL">All States</option>
+                </select>
+                <i class="fa-solid fa-location-dot absolute right-2.5 top-1/2 -translate-y-1/2 text-amber-600 text-xs pointer-events-none"></i>
+            </div>
+
+            <!-- Sorting Dropdown -->
+            <div class="relative min-w-[150px]">
+                <select id="sortSelect" onchange="handleSavedShopsSearchChange()" class="w-full bg-white border border-espresso-200 text-espresso-800 text-xs rounded-xl py-1.5 px-2.5 pr-7 focus:outline-none focus:border-amber-500 cursor-pointer appearance-none shadow-xs font-medium">
+                    <option value="rating-desc">★ Highest Rating</option>
+                    <option value="rating-asc">★ Lowest Rating</option>
+                    <option value="name-asc">Alphabetical (A - Z)</option>
+                    <option value="name-desc">Alphabetical (Z - A)</option>
+                    <option value="reviews-desc">Most Reviewed</option>
+                </select>
+                <i class="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-espresso-400 text-xs pointer-events-none"></i>
+            </div>
+
+            <!-- Mobile View Switcher (Map vs List) -->
+            <div class="flex md:hidden items-center bg-espresso-200/80 p-1 rounded-xl text-xs font-medium shrink-0">
+                <button id="mobileTabMapBtn" onclick="setMobileView('map')" class="px-3 py-1 rounded-lg bg-white text-espresso-900 shadow-xs">Map</button>
+                <button id="mobileTabListBtn" onclick="setMobileView('list')" class="px-3 py-1 rounded-lg text-espresso-700">List (<span id="mobileBadgeCount">0</span>)</button>
+            </div>
+        </div>
+    </div>
+
+    <main class="relative flex-1 w-full h-full overflow-hidden flex flex-col md:flex-row">
+        
+        <!-- MAP PANEL -->
+        <div id="mapPanel" class="w-full md:w-1/2 lg:w-3/5 h-full relative border-r border-espresso-200">
+            <div id="map" class="w-full h-full z-0"></div>
+
+            <!-- Floating Map Actions -->
+            <div class="absolute bottom-6 right-4 z-10 flex flex-col gap-2">
+                <!-- Location GPS Button -->
+                <button onclick="getUserLocation()" class="w-10 h-10 bg-white hover:bg-espresso-50 text-espresso-800 rounded-2xl shadow-lg border border-espresso-200 flex items-center justify-center transition active:scale-95 group" title="Locate Near Me">
+                    <i class="fa-solid fa-location-crosshairs text-amber-600 text-base group-hover:scale-110 transition"></i>
+                </button>
+                
+                <!-- Toggle Tap Map Mode -->
+                <button id="dropPinBtn" onclick="toggleDropPinMode()" class="bg-espresso-800 hover:bg-espresso-900 text-white px-3.5 py-2 rounded-2xl shadow-xl border border-amber-500/40 flex items-center space-x-2 text-xs font-medium transition active:scale-95">
+                    <i class="fa-solid fa-map-pin text-amber-400"></i>
+                    <span id="dropPinLabel">Tap Map to Add</span>
+                </button>
+            </div>
+
+            <!-- Tap Map Mode Banner -->
+            <div id="dropPinBanner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-10 glass-panel border border-amber-500/50 text-espresso-900 px-4 py-2 rounded-2xl shadow-xl flex items-center space-x-2 text-xs font-medium animate-bounce">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                <span>Click/Tap anywhere on the US map to place a coffee shop!</span>
+                <button onclick="toggleDropPinMode(false)" class="text-espresso-500 hover:text-espresso-900 ml-2">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- LIST PANEL -->
+        <div id="listPanel" class="hidden md:block w-full md:w-1/2 lg:w-2/5 h-full overflow-y-auto px-4 py-4 bg-espresso-50/50">
+            
+            <!-- Quick Tag Pills & Search Status Banner -->
+            <div class="space-y-2 mb-3">
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                    <button onclick="toggleTagFilter('all')" class="tag-filter-btn active-tag font-medium px-2.5 py-1 rounded-full bg-espresso-800 text-white shadow-xs shrink-0" data-tag="all">All</button>
+                    <button onclick="toggleTagFilter('5-star')" class="tag-filter-btn font-medium px-2.5 py-1 rounded-full bg-white text-espresso-700 border border-espresso-200 hover:border-amber-400 shrink-0" data-tag="5-star">★ 5 Stars</button>
+                    <button onclick="toggleTagFilter('Fast Wifi')" class="tag-filter-btn font-medium px-2.5 py-1 rounded-full bg-white text-espresso-700 border border-espresso-200 hover:border-amber-400 shrink-0" data-tag="Fast Wifi">Wifi</button>
+                    <button onclick="toggleTagFilter('Pour Over')" class="tag-filter-btn font-medium px-2.5 py-1 rounded-full bg-white text-espresso-700 border border-espresso-200 hover:border-amber-400 shrink-0" data-tag="Pour Over">Pour Over</button>
+                    <button onclick="toggleTagFilter('Outdoor Seating')" class="tag-filter-btn font-medium px-2.5 py-1 rounded-full bg-white text-espresso-700 border border-espresso-200 hover:border-amber-400 shrink-0" data-tag="Outdoor Seating">Outdoor</button>
+                    <button onclick="toggleTagFilter('Cozy Vibe')" class="tag-filter-btn font-medium px-2.5 py-1 rounded-full bg-white text-espresso-700 border border-espresso-200 hover:border-amber-400 shrink-0" data-tag="Cozy Vibe">Cozy</button>
+                </div>
+
+                <!-- Match Counter & Active Search Badge -->
+                <div id="searchResultsSummary" class="flex items-center justify-between text-xs text-espresso-600 bg-white/80 px-3 py-1.5 rounded-xl border border-espresso-200/60 shadow-xs">
+                    <span id="matchCountText" class="font-medium">Showing all saved shops</span>
+                    <button id="resetFiltersBtn" onclick="resetAllFilters()" class="hidden text-amber-600 hover:text-amber-800 font-semibold text-[11px] flex items-center gap-1">
+                        <i class="fa-solid fa-rotate-left text-[10px]"></i> Reset Filters
+                    </button>
+                </div>
+            </div>
+
+            <!-- Saved Shops Cards Feed -->
+            <div id="shopListContainer" class="space-y-4">
+                <!-- Cards render dynamically -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden text-center py-12 px-4 bg-white rounded-3xl border border-dashed border-espresso-300 max-w-sm mx-auto my-6">
+                <div class="w-12 h-12 bg-espresso-100 rounded-full flex items-center justify-center mx-auto mb-3 text-espresso-500 text-xl">
+                    <i class="fa-solid fa-mug-saucer"></i>
+                </div>
+                <h3 class="font-serif font-bold text-base text-espresso-900 mb-1">No Coffee Spots Match</h3>
+                <p class="text-xs text-espresso-600 mb-4 leading-relaxed">No shared places match your current search criteria. Try clearing search or add a new place!</p>
+                <div class="flex items-center justify-center gap-2">
+                    <button onclick="clearSavedShopsSearch()" class="bg-espresso-100 hover:bg-espresso-200 text-espresso-800 font-medium text-xs px-3.5 py-2 rounded-xl transition">
+                        Clear Search
+                    </button>
+                    <button onclick="openAddModal()" class="bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs px-3.5 py-2 rounded-xl shadow-md transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-plus text-[10px]"></i>
+                        <span>Add New Shop</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="shopModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-espresso-900/60 backdrop-blur-xs transition-opacity duration-200 opacity-0">
+        <div class="bg-white rounded-3xl shadow-2xl border border-espresso-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-200">
+            
+            <div class="bg-espresso-900 text-white px-6 py-3.5 flex items-center justify-between border-b border-espresso-700">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center text-white text-xs">
+                        <i id="modalHeaderIcon" class="fa-solid fa-plus"></i>
+                    </div>
+                    <h2 id="modalTitle" class="font-serif font-bold text-base">Add Coffee Shop</h2>
+                </div>
+                <button onclick="closeModal('shopModal')" class="w-7 h-7 rounded-full bg-espresso-800 hover:bg-espresso-700 text-espresso-300 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+
+            <form id="shopForm" onsubmit="handleSaveShop(event)" class="p-5 overflow-y-auto space-y-3.5 text-xs">
+                <input type="hidden" id="shopId">
+                <input type="hidden" id="shopLat">
+                <input type="hidden" id="shopLng">
+
+                <div>
+                    <label class="block text-espresso-800 font-semibold mb-1">Shop Name <span class="text-amber-600">*</span></label>
+                    <input type="text" id="shopName" required placeholder="e.g. Metric Coffee Roasters" class="w-full bg-espresso-50/50 border border-espresso-200 rounded-xl px-3 py-2 text-espresso-900 focus:outline-none focus:border-amber-500 font-medium">
+                </div>
+
+                <!-- Address & Geocoding -->
+                <div>
+                    <label class="block text-espresso-800 font-semibold mb-1">Address / City, State <span class="text-amber-600">*</span></label>
+                    <div class="flex gap-2">
+                        <input type="text" id="shopAddressQuery" required placeholder="e.g. 2021 W Fulton St, Chicago, IL" class="flex-1 bg-espresso-50/50 border border-espresso-200 rounded-xl px-3 py-2 text-espresso-900 focus:outline-none focus:border-amber-500">
+                        <button type="button" onclick="geocodeAddressInModal()" class="bg-espresso-800 hover:bg-espresso-700 text-white px-3 py-2 rounded-xl transition flex items-center space-x-1 shrink-0" title="Geocode Address">
+                            <i class="fa-solid fa-magnifying-glass-location text-amber-400"></i>
+                            <span>Geocode</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="coordsIndicator" class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center justify-between text-[11px] text-amber-900">
+                    <div class="flex items-center space-x-1.5 truncate">
+                        <i class="fa-solid fa-location-dot text-amber-600"></i>
+                        <span id="coordsText" class="truncate">Coordinates set</span>
+                    </div>
+                </div>
+
+                <!-- Review Fields -->
+                <div class="bg-espresso-50/80 p-3 rounded-2xl border border-espresso-200 space-y-2.5">
+                    <div class="font-semibold text-espresso-900 border-b border-espresso-200 pb-1 flex items-center justify-between">
+                        <span>Your Rating & Order Log</span>
+                        <span class="text-[10px] text-espresso-500 font-normal">Posting as: <strong id="formAuthorName">User</strong></span>
+                    </div>
+
+                    <div>
+                        <label class="block text-espresso-800 font-medium mb-1">Star Rating</label>
+                        <div class="flex items-center space-x-2">
+                            <div id="interactiveRating" class="star-rating flex items-center space-x-1 text-xl text-amber-400">
+                                <i class="fa-solid fa-star" data-val="1" onclick="setRating(1)"></i>
+                                <i class="fa-solid fa-star" data-val="2" onclick="setRating(2)"></i>
+                                <i class="fa-solid fa-star" data-val="3" onclick="setRating(3)"></i>
+                                <i class="fa-solid fa-star" data-val="4" onclick="setRating(4)"></i>
+                                <i class="fa-solid fa-star" data-val="5" onclick="setRating(5)"></i>
+                            </div>
+                            <span id="ratingValText" class="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md text-[11px]">5.0 / 5</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-espresso-800 font-medium mb-1">What you had there</label>
+                        <input type="text" id="shopWhatIHad" placeholder="e.g. Oat Flat White, Washed Ethiopian Pour Over, Scone" class="w-full bg-white border border-espresso-200 rounded-xl px-3 py-1.5 text-espresso-900 focus:outline-none focus:border-amber-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-espresso-800 font-medium mb-1">Tasting Notes</label>
+                        <textarea id="shopNotes" rows="2" placeholder="e.g. Bright acidity, velvety milk texture, fast wifi!" class="w-full bg-white border border-espresso-200 rounded-xl p-2.5 text-espresso-900 focus:outline-none focus:border-amber-500 resize-none"></textarea>
+                    </div>
+                </div>
+
+                <!-- Amenity Tags -->
+                <div>
+                    <label class="block text-espresso-800 font-semibold mb-1">Amenities & Highlights</label>
+                    <div class="flex flex-wrap gap-1.5" id="tagSelectorContainer">
+                        <button type="button" onclick="toggleFormTag('Fast Wifi', this)" class="form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition">Fast Wifi</button>
+                        <button type="button" onclick="toggleFormTag('Pour Over', this)" class="form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition">Pour Over</button>
+                        <button type="button" onclick="toggleFormTag('Great Espresso', this)" class="form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition">Great Espresso</button>
+                        <button type="button" onclick="toggleFormTag('Outdoor Seating', this)" class="form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition">Outdoor Seating</button>
+                        <button type="button" onclick="toggleFormTag('Cozy Vibe', this)" class="form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition">Cozy Vibe</button>
+                        <button type="button" onclick="toggleFormTag('Fresh Bakery', this)" class="form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition">Fresh Bakery</button>
+                    </div>
+                </div>
+
+                <div class="pt-2 border-t border-espresso-100 flex items-center justify-end space-x-2">
+                    <button type="button" onclick="closeModal('shopModal')" class="px-3.5 py-1.5 rounded-xl text-espresso-600 hover:bg-espresso-100 font-medium transition">Cancel</button>
+                    <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-1.5 rounded-xl shadow-md transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-check text-[10px]"></i>
+                        <span>Save Coffee Shop</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD REVIEW MODAL -->
+    <div id="reviewModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-espresso-900/60 backdrop-blur-xs transition-opacity duration-200 opacity-0">
+        <div class="bg-white rounded-3xl shadow-2xl border border-espresso-200 w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-200">
+            <div class="bg-espresso-900 text-white px-5 py-3.5 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-star text-amber-400"></i>
+                    <h3 id="reviewModalTitle" class="font-serif font-bold text-sm">Add Community Rating</h3>
+                </div>
+                <button onclick="closeModal('reviewModal')" class="text-espresso-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="reviewForm" onsubmit="handleSaveReview(event)" class="p-5 space-y-3 text-xs">
+                <input type="hidden" id="reviewTargetShopId">
+
+                <div>
+                    <label class="block text-espresso-800 font-semibold mb-1">Your Rating</label>
+                    <div class="flex items-center space-x-2">
+                        <div id="reviewInteractiveRating" class="star-rating flex items-center space-x-1 text-xl text-amber-400">
+                            <i class="fa-solid fa-star" data-val="1" onclick="setReviewRating(1)"></i>
+                            <i class="fa-solid fa-star" data-val="2" onclick="setReviewRating(2)"></i>
+                            <i class="fa-solid fa-star" data-val="3" onclick="setReviewRating(3)"></i>
+                            <i class="fa-solid fa-star" data-val="4" onclick="setReviewRating(4)"></i>
+                            <i class="fa-solid fa-star" data-val="5" onclick="setReviewRating(5)"></i>
+                        </div>
+                        <span id="reviewRatingValText" class="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">5.0 / 5</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-espresso-800 font-semibold mb-1">What you ordered</label>
+                    <input type="text" id="reviewWhatIHad" required placeholder="e.g. Cortado, Iced Americano, Almond Croissant" class="w-full bg-espresso-50/50 border border-espresso-200 rounded-xl px-3 py-2 text-espresso-900 focus:outline-none focus:border-amber-500">
+                </div>
+
+                <div>
+                    <label class="block text-espresso-800 font-semibold mb-1">Tasting Notes</label>
+                    <textarea id="reviewNotes" rows="3" required placeholder="Share your opinion on espresso, milk quality, vibes, wifi speed..." class="w-full bg-espresso-50/50 border border-espresso-200 rounded-xl p-2.5 text-espresso-900 focus:outline-none focus:border-amber-500 resize-none"></textarea>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end space-x-2 border-t border-espresso-100">
+                    <button type="button" onclick="closeModal('reviewModal')" class="px-3.5 py-1.5 text-espresso-600 hover:bg-espresso-100 rounded-xl font-medium">Cancel</button>
+                    <button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-1.5 rounded-xl shadow-md transition">Post Review</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- PROFILE MODAL -->
+    <div id="profileModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-espresso-900/60 backdrop-blur-xs transition-opacity">
+        <div class="bg-white rounded-3xl shadow-2xl border border-espresso-200 w-full max-w-sm p-5 space-y-4 text-xs">
+            <div class="flex items-center justify-between border-b border-espresso-100 pb-2.5">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-id-badge text-amber-600 text-base"></i>
+                    <h3 class="font-serif font-bold text-base text-espresso-900">Community Profile</h3>
+                </div>
+                <button onclick="closeModal('profileModal')" class="text-espresso-400 hover:text-espresso-800">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <p class="text-espresso-600 leading-relaxed">Choose an avatar and nickname so friends can recognize your coffee reviews!</p>
+                
+                <div>
+                    <label class="block font-semibold text-espresso-800 mb-1">Nickname</label>
+                    <input type="text" id="profileNameInput" placeholder="e.g. Espresso Emma" class="w-full bg-espresso-50 border border-espresso-200 rounded-xl px-3 py-2 text-espresso-900 focus:outline-none focus:border-amber-500 font-medium">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-espresso-800 mb-1.5">Avatar Emoji</label>
+                    <div class="flex items-center space-x-2 text-xl" id="avatarPicker">
+                        <button type="button" onclick="selectAvatar('☕', this)" class="avatar-opt p-2 rounded-xl border-2 border-amber-500 bg-amber-50">☕</button>
+                        <button type="button" onclick="selectAvatar('🥐', this)" class="avatar-opt p-2 rounded-xl border border-espresso-200 hover:bg-espresso-50">🥐</button>
+                        <button type="button" onclick="selectAvatar('🧊', this)" class="avatar-opt p-2 rounded-xl border border-espresso-200 hover:bg-espresso-50">🧊</button>
+                        <button type="button" onclick="selectAvatar('🫘', this)" class="avatar-opt p-2 rounded-xl border border-espresso-200 hover:bg-espresso-50">🫘</button>
+                        <button type="button" onclick="selectAvatar('🌿', this)" class="avatar-opt p-2 rounded-xl border border-espresso-200 hover:bg-espresso-50">🌿</button>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex justify-end">
+                    <button onclick="saveProfile()" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2 rounded-xl shadow-md transition">Save Profile</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Initial Sample US Coffee Shops
+        const SAMPLE_COFFEE_SHOPS = [
+            {
+                id: 'shop_onyx_rogers',
+                name: 'Onyx Coffee Lab',
+                address: '101 E Walnut St, Rogers, AR',
+                cityState: 'Rogers, AR',
+                lat: 36.3326,
+                lng: -94.1185,
+                tags: ['Fast Wifi', 'Pour Over', 'Great Espresso', 'Outdoor Seating', 'Fresh Bakery'],
+                createdByName: 'Barista Bob',
+                reviews: [
+                    {
+                        reviewId: 'rev_1',
+                        userId: 'u_sample_1',
+                        userName: 'Barista Bob',
+                        userAvatar: '☕',
+                        rating: 5.0,
+                        whatIHad: 'Monarch Espresso & Washed Ethiopian Pour Over',
+                        notes: 'Outstanding floral jasmine notes and smooth body. Iconic coffee destination!',
+                        timestamp: Date.now() - 86400000 * 5
+                    }
+                ]
+            },
+            {
+                id: 'shop_sey_brooklyn',
+                name: 'Sey Coffee',
+                address: '18 Grattan St, Brooklyn, NY',
+                cityState: 'Brooklyn, NY',
+                lat: 40.7052,
+                lng: -73.9328,
+                tags: ['Pour Over', 'Great Espresso', 'Cozy Vibe'],
+                createdByName: 'Espresso Emma',
+                reviews: [
+                    {
+                        reviewId: 'rev_2',
+                        userId: 'u_sample_2',
+                        userName: 'Espresso Emma',
+                        userAvatar: '🥐',
+                        rating: 5.0,
+                        whatIHad: 'Light Roast Kenyan Single Origin Pour Over',
+                        notes: 'Vibrant acidity with tea-like silky finish. Light-roast perfection!',
+                        timestamp: Date.now() - 86400000 * 3
+                    }
+                ]
+            },
+            {
+                id: 'shop_stumptown_portland',
+                name: 'Stumptown Coffee Roasters',
+                address: '1026 SW Harvey Milk St, Portland, OR',
+                cityState: 'Portland, OR',
+                lat: 45.5222,
+                lng: -122.6815,
+                tags: ['Fast Wifi', 'Great Espresso', 'Fresh Bakery'],
+                createdByName: 'Cold Brew Chris',
+                reviews: [
+                    {
+                        reviewId: 'rev_3',
+                        userId: 'u_sample_3',
+                        userName: 'Cold Brew Chris',
+                        userAvatar: '🧊',
+                        rating: 4.5,
+                        whatIHad: 'Hair Bender Espresso Tonic & Cardamom Knot',
+                        notes: 'Classic PNW coffee vibe. Great espresso pull with rich citrus snap.',
+                        timestamp: Date.now() - 86400000 * 10
+                    }
+                ]
+            },
+            {
+                id: 'shop_intelligentsia_chicago',
+                name: 'Intelligentsia Coffee',
+                address: '53 E Randolph St, Chicago, IL',
+                cityState: 'Chicago, IL',
+                lat: 41.8845,
+                lng: -87.6258,
+                tags: ['Fast Wifi', 'Outdoor Seating', 'Great Espresso'],
+                createdByName: 'Barista Bob',
+                reviews: [
+                    {
+                        reviewId: 'rev_4',
+                        userId: 'u_sample_1',
+                        userName: 'Barista Bob',
+                        userAvatar: '☕',
+                        rating: 4.5,
+                        whatIHad: 'Oat Flat White & Black Cat Cold Brew',
+                        notes: 'Microfoam was velvety and rich. Super convenient location near the Loop.',
+                        timestamp: Date.now() - 86400000 * 12
+                    }
+                ]
+            },
+            {
+                id: 'shop_devocion_brooklyn',
+                name: 'Devención Coffee',
+                address: '69 Grand St, Brooklyn, NY',
+                cityState: 'Brooklyn, NY',
+                lat: 40.7161,
+                lng: -73.9642,
+                tags: ['Fast Wifi', 'Cozy Vibe', 'Great Espresso'],
+                createdByName: 'Espresso Emma',
+                reviews: [
+                    {
+                        reviewId: 'rev_5',
+                        userId: 'u_sample_2',
+                        userName: 'Espresso Emma',
+                        userAvatar: '🥐',
+                        rating: 5.0,
+                        whatIHad: 'Wild Forest Espresso & Guava Pastry',
+                        notes: 'Beans roasted within days of leaving Colombia. Lush botanical indoor garden!',
+                        timestamp: Date.now() - 86400000 * 2
+                    }
+                ]
+            }
+        ];
+
+        window.coffeeShops = [];
+        window.map = null;
+        window.mapMarkers = {};
+        window.activeTagFilter = 'all';
+        window.isDropPinMode = false;
+        window.selectedFormTags = new Set();
+        window.currentFormRating = 5.0;
+        window.currentReviewRating = 5.0;
+        window.tempClickMarker = null;
+        window.selectedAvatarEmoji = '☕';
+        window.geoDebounceTimer = null;
+
+        // Current User Profile
+        window.currentUser = {
+            uid: localStorage.getItem('bt_uid') || 'u_' + Math.random().toString(36).substr(2, 9),
+            name: localStorage.getItem('bt_uname') || 'Coffee Enthusiast ' + Math.floor(Math.random() * 899 + 100),
+            avatar: localStorage.getItem('bt_uavatar') || '☕'
+        };
+
+        localStorage.setItem('bt_uid', window.currentUser.uid);
+        localStorage.setItem('bt_uname', window.currentUser.name);
+        localStorage.setItem('bt_uavatar', window.currentUser.avatar);
+
+        let db = null;
+        let auth = null;
+        let appId = typeof __app_id !== 'undefined' ? __app_id : 'brewtracker-shared-app';
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            updateProfileHeaderUI();
+            initLeafletMap();
+            await initFirebaseIntegration();
+            
+            // Close geocode dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                const drop = document.getElementById('geoSearchResultsDropdown');
+                const input = document.getElementById('locationSearchInput');
+                if (drop && !drop.contains(e.target) && e.target !== input) {
+                    drop.classList.add('hidden');
+                }
+            });
+        });
+
+        async function initFirebaseIntegration() {
+            try {
+                let firebaseConfig = null;
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                    firebaseConfig = typeof __firebase_config === 'string' ? JSON.parse(__firebase_config) : __firebase_config;
+                }
+
+                if (firebaseConfig) {
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    if (auth.currentUser) {
+                        window.currentUser.uid = auth.currentUser.uid;
+                    }
+
+                    document.getElementById('syncStatusBadge').classList.remove('hidden');
+
+                    const shopsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'shops');
+                    
+                    onSnapshot(shopsColRef, (snapshot) => {
+                        if (snapshot.empty) {
+                            seedInitialShops(shopsColRef);
+                        } else {
+                            const loaded = [];
+                            snapshot.forEach(docSnap => {
+                                loaded.push({ id: docSnap.id, ...docSnap.data() });
+                            });
+                            window.coffeeShops = loaded;
+                            updateAppDisplay();
+                        }
+                    }, (error) => {
+                        console.error("Firestore error:", error);
+                        fallbackLocalStore();
+                    });
+
+                } else {
+                    fallbackLocalStore();
+                }
+            } catch (e) {
+                console.warn("Firebase fallback mode:", e);
+                fallbackLocalStore();
+            }
+        }
+
+        async function seedInitialShops(colRef) {
+            for (const shop of SAMPLE_COFFEE_SHOPS) {
+                const shopDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'shops', shop.id);
+                await setDoc(shopDocRef, shop);
+            }
+        }
+
+        function fallbackLocalStore() {
+            const local = localStorage.getItem('bt_local_shops');
+            if (local) {
+                try { window.coffeeShops = JSON.parse(local); } catch(e) { window.coffeeShops = [...SAMPLE_COFFEE_SHOPS]; }
+            } else {
+                window.coffeeShops = [...SAMPLE_COFFEE_SHOPS];
+            }
+            updateAppDisplay();
+        }
+
+        window.saveShopsToDb = async function(shopData) {
+            if (db) {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'shops', shopData.id);
+                await setDoc(docRef, shopData, { merge: true });
+            } else {
+                const idx = window.coffeeShops.findIndex(s => s.id === shopData.id);
+                if (idx !== -1) window.coffeeShops[idx] = shopData;
+                else window.coffeeShops.unshift(shopData);
+                localStorage.setItem('bt_local_shops', JSON.stringify(window.coffeeShops));
+                updateAppDisplay();
+            }
+        };
+
+        window.deleteShopFromDb = async function(shopId) {
+            if (db) {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'shops', shopId);
+                await deleteDoc(docRef);
+            } else {
+                window.coffeeShops = window.coffeeShops.filter(s => s.id !== shopId);
+                localStorage.setItem('bt_local_shops', JSON.stringify(window.coffeeShops));
+                updateAppDisplay();
+            }
+        };
+
+        function initLeafletMap() {
+            // US Center coordinates [39.8283, -98.5795], zoom level 4
+            window.map = L.map('map', { zoomControl: false }).setView([39.8283, -98.5795], 4);
+
+            L.control.zoom({ position: 'topright' }).addTo(window.map);
+
+            // OpenStreetMap tile server - 100% free, zero API key required
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(window.map);
+
+            window.map.on('click', (e) => {
+                const { lat, lng } = e.latlng;
+                if (window.isDropPinMode) {
+                    window.toggleDropPinMode(false);
+                    window.openAddModalWithCoords(lat, lng);
+                } else {
+                    showTempMarker(lat, lng, "Tapped Map Location");
+                }
+            });
+        }
+
+        window.handleLocationInput = function(val) {
+            const clearBtn = document.getElementById('clearGeoBtn');
+            const dropdown = document.getElementById('geoSearchResultsDropdown');
+
+            if (val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            if (window.geoDebounceTimer) clearTimeout(window.geoDebounceTimer);
+
+            window.geoDebounceTimer = setTimeout(() => {
+                fetchGeocodingResults(val);
+            }, 300);
+        };
+
+        window.clearLocationSearch = function() {
+            const input = document.getElementById('locationSearchInput');
+            input.value = '';
+            document.getElementById('clearGeoBtn').classList.add('hidden');
+            document.getElementById('geoSearchResultsDropdown').classList.add('hidden');
+        };
+
+        async function fetchGeocodingResults(query) {
+            const spinner = document.getElementById('geoSearchSpinner');
+            const dropdown = document.getElementById('geoSearchResultsDropdown');
+
+            spinner.classList.remove('hidden');
+
+            try {
+                // Primary: Photon Komoot API with language & limit
+                const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lang=en&limit=7`;
+                const res = await fetch(photonUrl);
+                const data = await res.json();
+
+                let results = (data.features || []).map(f => {
+                    const props = f.properties || {};
+                    const city = props.city || props.town || props.village || props.district || '';
+                    const state = props.state || props.county || '';
+                    const country = props.country || '';
+                    const name = props.name || city || state;
+                    
+                    const isUS = country.toLowerCase() === 'united states' || country.toLowerCase() === 'us' || country.toLowerCase() === 'usa';
+                    const fullAddr = [name, city, state, country].filter(Boolean).join(', ');
+
+                    return {
+                        name: name,
+                        subText: [city, state, country].filter(Boolean).join(', '),
+                        isUS,
+                        lat: f.geometry.coordinates[1],
+                        lng: f.geometry.coordinates[0],
+                        raw: props
+                    };
+                });
+
+                // Prioritize US results
+                results.sort((a, b) => (b.isUS ? 1 : 0) - (a.isUS ? 1 : 0));
+
+                // Fallback to Nominatim if Photon yields no results
+                if (results.length === 0) {
+                    const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&limit=6&q=${encodeURIComponent(query)}`;
+                    const nomRes = await fetch(nomUrl);
+                    const nomData = await nomRes.json();
+
+                    results = nomData.map(item => ({
+                        name: item.display_name.split(',')[0],
+                        subText: item.display_name.split(',').slice(1).join(',').trim(),
+                        isUS: true,
+                        lat: parseFloat(item.lat),
+                        lng: parseFloat(item.lon)
+                    }));
+                }
+
+                renderGeoDropdown(results, query);
+            } catch (err) {
+                console.error("Geocoding failed:", err);
+                renderGeoDropdownError();
+            } finally {
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function renderGeoDropdown(results, query) {
+            const dropdown = document.getElementById('geoSearchResultsDropdown');
+
+            if (results.length === 0) {
+                dropdown.innerHTML = `
+                    <div class="p-3 text-center text-xs text-espresso-500">
+                        <p class="font-medium">No US location found for "${escapeHtml(query)}"</p>
+                        <p class="text-[11px] text-espresso-400 mt-0.5">Try searching city, state, address or zip code.</p>
+                    </div>
+                `;
+                dropdown.classList.remove('hidden');
+                return;
+            }
+
+            dropdown.innerHTML = results.map((r, idx) => `
+                <div onclick="selectGeoLocation(${r.lat}, ${r.lng}, '${escapeHtml(r.name)}', '${escapeHtml(r.subText)}')" class="px-3.5 py-2.5 hover:bg-amber-50 cursor-pointer transition flex items-start space-x-2.5">
+                    <div class="w-6 h-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-location-dot text-xs"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-xs text-espresso-900 truncate">${escapeHtml(r.name)}</div>
+                        <div class="text-[11px] text-espresso-500 truncate">${escapeHtml(r.subText)}</div>
+                    </div>
+                    ${r.isUS ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 font-semibold px-1.5 py-0.5 rounded shrink-0">US</span>' : ''}
+                </div>
+            `).join('');
+
+            dropdown.classList.remove('hidden');
+        }
+
+        function renderGeoDropdownError() {
+            const dropdown = document.getElementById('geoSearchResultsDropdown');
+            dropdown.innerHTML = `
+                <div class="p-3 text-center text-xs text-red-600">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> Location lookup offline. You can still tap directly on the map!
+                </div>
+            `;
+            dropdown.classList.remove('hidden');
+        }
+
+        window.selectGeoLocation = function(lat, lng, name, subText) {
+            document.getElementById('geoSearchResultsDropdown').classList.add('hidden');
+            document.getElementById('locationSearchInput').value = `${name}, ${subText}`;
+
+            window.setMobileView('map');
+            window.map.setView([lat, lng], 14);
+
+            showTempMarker(lat, lng, name);
+        };
+
+        function showTempMarker(lat, lng, label) {
+            if (window.tempClickMarker) {
+                window.map.removeLayer(window.tempClickMarker);
+            }
+
+            const tempIcon = L.divIcon({
+                className: 'custom-temp-pin',
+                html: `<div class="w-9 h-9 bg-amber-500 border-2 border-white rounded-full flex items-center justify-center text-white shadow-xl animate-bounce"><i class="fa-solid fa-plus text-xs"></i></div>`,
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+            });
+
+            window.tempClickMarker = L.marker([lat, lng], { icon: tempIcon }).addTo(window.map);
+
+            const popupContent = `
+                <div class="p-3 text-center">
+                    <p class="text-xs font-bold text-espresso-900 mb-1 truncate">${escapeHtml(label)}</p>
+                    <p class="text-[11px] text-espresso-500 mb-2.5">Mapped Pin Location</p>
+                    <button onclick="openAddModalWithCoords(${lat}, ${lng}, '${escapeHtml(label)}')" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs py-1.5 px-3 rounded-xl shadow-xs transition flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-mug-hot text-[10px]"></i>
+                        <span>+ Add Coffee Shop Here</span>
+                    </button>
+                </div>
+            `;
+
+            window.tempClickMarker.bindPopup(popupContent, { offset: [0, -10] }).openPopup();
+        }
+
+        window.handleSavedShopsSearchChange = function() {
+            const query = document.getElementById('savedShopsSearchInput').value;
+            const clearBtn = document.getElementById('clearSavedSearchBtn');
+            
+            if (query.length > 0) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+
+            updateAppDisplay();
+        };
+
+        window.clearSavedShopsSearch = function() {
+            document.getElementById('savedShopsSearchInput').value = '';
+            window.handleSavedShopsSearchChange();
+        };
+
+        window.resetAllFilters = function() {
+            document.getElementById('savedShopsSearchInput').value = '';
+            document.getElementById('stateSelect').value = 'ALL';
+            window.clearSavedShopsSearch();
+            window.toggleTagFilter('all');
+        };
+
+        function getCalculatedShopStats(shop) {
+            const reviews = shop.reviews || [];
+            if (reviews.length === 0) return { avgRating: 0, count: 0 };
+            const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+            return {
+                avgRating: parseFloat((sum / reviews.length).toFixed(1)),
+                count: reviews.length
+            };
+        }
+
+        function getFilteredAndSortedShops() {
+            const query = (document.getElementById('savedShopsSearchInput').value || '').toLowerCase().trim();
+            const sortMode = document.getElementById('sortSelect').value;
+            const stateFilter = document.getElementById('stateSelect').value;
+
+            return (window.coffeeShops || []).filter(shop => {
+                const stats = getCalculatedShopStats(shop);
+
+                // Multi-field search match
+                const matchesQuery = !query || 
+                    (shop.name && shop.name.toLowerCase().includes(query)) ||
+                    (shop.cityState && shop.cityState.toLowerCase().includes(query)) ||
+                    (shop.address && shop.address.toLowerCase().includes(query)) ||
+                    (shop.tags && shop.tags.some(t => t.toLowerCase().includes(query))) ||
+                    (shop.reviews && shop.reviews.some(r => 
+                        (r.notes && r.notes.toLowerCase().includes(query)) ||
+                        (r.whatIHad && r.whatIHad.toLowerCase().includes(query)) ||
+                        (r.userName && r.userName.toLowerCase().includes(query))
+                    ));
+
+                // State Filter
+                let matchesState = true;
+                if (stateFilter !== 'ALL') {
+                    matchesState = shop.cityState && shop.cityState.toUpperCase().includes(stateFilter.toUpperCase());
+                }
+
+                // Tag Filter
+                let matchesTag = true;
+                if (window.activeTagFilter === '5-star') matchesTag = stats.avgRating >= 4.8;
+                else if (window.activeTagFilter !== 'all') {
+                    matchesTag = shop.tags && shop.tags.includes(window.activeTagFilter);
+                }
+
+                return matchesQuery && matchesState && matchesTag;
+            }).sort((a, b) => {
+                const statsA = getCalculatedShopStats(a);
+                const statsB = getCalculatedShopStats(b);
+
+                if (sortMode === 'rating-desc') return statsB.avgRating - statsA.avgRating;
+                if (sortMode === 'rating-asc') return statsA.avgRating - statsB.avgRating;
+                if (sortMode === 'name-asc') return a.name.localeCompare(b.name);
+                if (sortMode === 'name-desc') return b.name.localeCompare(a.name);
+                if (sortMode === 'reviews-desc') return statsB.count - statsA.count;
+                return 0;
+            });
+        }
+
+        function updateAppDisplay() {
+            renderMapMarkers();
+            renderShopsList();
+            updateHeaderStats();
+            updateStateFilterDropdown();
+        }
+
+        function renderMapMarkers() {
+            if (!window.map) return;
+
+            Object.values(window.mapMarkers).forEach(m => window.map.removeLayer(m));
+            window.mapMarkers = {};
+
+            const filteredShops = getFilteredAndSortedShops();
+
+            filteredShops.forEach(shop => {
+                const stats = getCalculatedShopStats(shop);
+                
+                const customIcon = L.divIcon({
+                    className: 'custom-coffee-pin-container',
+                    html: `
+                        <div class="custom-coffee-pin" title="${escapeHtml(shop.name)}">
+                            <i class="fa-solid fa-mug-hot"></i>
+                            <span class="pin-rating">${stats.avgRating > 0 ? stats.avgRating.toFixed(1) : 'NEW'}</span>
+                        </div>
+                    `,
+                    iconSize: [38, 38],
+                    iconAnchor: [19, 38],
+                    popupAnchor: [0, -36]
+                });
+
+                const marker = L.marker([shop.lat, shop.lng], { icon: customIcon }).addTo(window.map);
+
+                const recentReview = shop.reviews && shop.reviews.length > 0 ? shop.reviews[shop.reviews.length - 1] : null;
+
+                const popupHtml = `
+                    <div class="p-3 bg-white">
+                        <div class="flex items-center justify-between border-b border-espresso-100 pb-2 mb-2">
+                            <h4 class="font-serif font-bold text-sm text-espresso-900 leading-snug">${escapeHtml(shop.name)}</h4>
+                            <span class="bg-amber-100 text-amber-800 font-bold text-xs px-2 py-0.5 rounded-md flex items-center gap-1">
+                                <i class="fa-solid fa-star text-amber-500 text-[10px]"></i> ${stats.avgRating.toFixed(1)}
+                            </span>
+                        </div>
+                        <p class="text-xs text-espresso-500 mb-2 flex items-center gap-1">
+                            <i class="fa-solid fa-location-dot text-amber-600"></i> ${escapeHtml(shop.cityState)}
+                        </p>
+                        ${recentReview ? `
+                            <div class="bg-espresso-50 p-2 rounded-xl mb-2 border border-espresso-100 text-xs">
+                                <div class="flex items-center space-x-1 font-semibold text-espresso-800 text-[11px] mb-0.5">
+                                    <span>${recentReview.userAvatar || '☕'} ${escapeHtml(recentReview.userName || 'User')}</span>
+                                    <span class="text-amber-600">★ ${recentReview.rating}</span>
+                                </div>
+                                <p class="text-espresso-700 italic line-clamp-2">"${escapeHtml(recentReview.notes || '')}"</p>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="flex items-center justify-between pt-1 text-xs">
+                            <span class="text-[10px] text-espresso-400">${stats.count} review(s)</span>
+                            <button onclick="openReviewModal('${shop.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition text-xs font-medium">
+                                + Log Review
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupHtml);
+                window.mapMarkers[shop.id] = marker;
+            });
+        }
+
+        function renderShopsList() {
+            const container = document.getElementById('shopListContainer');
+            const emptyState = document.getElementById('emptyState');
+            const mobileBadge = document.getElementById('mobileBadgeCount');
+            const matchSummary = document.getElementById('matchCountText');
+            const resetBtn = document.getElementById('resetFiltersBtn');
+
+            const filtered = getFilteredAndSortedShops();
+            const totalCount = (window.coffeeShops || []).length;
+            mobileBadge.textContent = filtered.length;
+
+            const searchQuery = (document.getElementById('savedShopsSearchInput').value || '').trim();
+            const stateVal = document.getElementById('stateSelect').value;
+            const tagVal = window.activeTagFilter;
+
+            const hasActiveFilter = searchQuery.length > 0 || stateVal !== 'ALL' || tagVal !== 'all';
+
+            if (hasActiveFilter) {
+                resetBtn.classList.remove('hidden');
+                matchSummary.textContent = `Showing ${filtered.length} of ${totalCount} saved shops`;
+            } else {
+                resetBtn.classList.add('hidden');
+                matchSummary.textContent = `Showing all ${totalCount} saved coffee spots`;
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            container.innerHTML = filtered.map(shop => {
+                const stats = getCalculatedShopStats(shop);
+                const tagsHtml = (shop.tags || []).map(t => 
+                    `<span class="bg-espresso-100 text-espresso-700 text-[10px] px-2 py-0.5 rounded-md font-medium">${escapeHtml(t)}</span>`
+                ).join(' ');
+
+                const reviewsHtml = (shop.reviews || []).map(rev => `
+                    <div class="bg-espresso-50/80 p-2.5 rounded-xl border border-espresso-100 text-xs">
+                        <div class="flex items-center justify-between mb-1">
+                            <div class="flex items-center space-x-1.5 font-semibold text-espresso-900">
+                                <span class="text-sm">${rev.userAvatar || '☕'}</span>
+                                <span>${escapeHtml(rev.userName || 'User')}</span>
+                            </div>
+                            <span class="bg-amber-100 text-amber-800 font-bold text-[10px] px-1.5 py-0.5 rounded">
+                                ★ ${rev.rating}
+                            </span>
+                        </div>
+                        ${rev.whatIHad ? `<p class="text-[11px] text-amber-800 font-medium mb-0.5"><i class="fa-solid fa-mug-hot mr-1 text-[10px]"></i> Had: ${escapeHtml(rev.whatIHad)}</p>` : ''}
+                        ${rev.notes ? `<p class="text-espresso-700 italic text-xs leading-relaxed">"${escapeHtml(rev.notes)}"</p>` : ''}
+                    </div>
+                `).join('');
+
+                return `
+                    <div class="bg-white rounded-2xl border border-espresso-200 p-4 shadow-sm hover:shadow-md transition space-y-3">
+                        <div>
+                            <div class="flex items-start justify-between gap-2 mb-1">
+                                <h3 class="font-serif font-bold text-base text-espresso-900 leading-snug">${escapeHtml(shop.name)}</h3>
+                                <div class="flex items-center bg-amber-50 text-amber-800 font-bold text-xs px-2 py-1 rounded-xl border border-amber-200 shrink-0">
+                                    <i class="fa-solid fa-star text-amber-500 mr-1 text-[11px]"></i>
+                                    <span>${stats.avgRating.toFixed(1)}</span>
+                                    <span class="text-espresso-400 font-normal ml-1 text-[10px]">(${stats.count})</span>
+                                </div>
+                            </div>
+
+                            <p class="text-xs text-espresso-500 flex items-center gap-1.5 mb-2">
+                                <i class="fa-solid fa-location-dot text-amber-600"></i>
+                                <span>${escapeHtml(shop.address || shop.cityState)}</span>
+                            </p>
+
+                            ${shop.tags && shop.tags.length > 0 ? `<div class="flex flex-wrap gap-1 mb-2">${tagsHtml}</div>` : ''}
+                        </div>
+
+                        <div class="space-y-2 border-t border-espresso-100 pt-2.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-semibold text-espresso-700 uppercase tracking-wider">Community Journal</span>
+                                <button onclick="openReviewModal('${shop.id}')" class="text-xs font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-1">
+                                    <i class="fa-solid fa-plus text-[10px]"></i> Log What You Had
+                                </button>
+                            </div>
+                            <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                ${reviewsHtml || '<p class="text-xs text-espresso-400 italic">No reviews logged yet.</p>'}
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-espresso-100 flex items-center justify-between text-xs">
+                            <button onclick="focusShopOnMap('${shop.id}')" class="px-3 py-1 bg-espresso-100 hover:bg-amber-500 hover:text-white text-espresso-800 rounded-lg font-medium transition flex items-center space-x-1">
+                                <i class="fa-solid fa-map-pin text-[10px]"></i>
+                                <span>Show on Map</span>
+                            </button>
+                            
+                            <button onclick="confirmDeleteShop('${shop.id}')" class="text-espresso-400 hover:text-red-600 transition text-xs">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.geocodeAddressInModal = async function() {
+            const query = document.getElementById('shopAddressQuery').value.trim();
+            if (!query) {
+                showToast("Please enter an address or city/state first.", "error");
+                return;
+            }
+
+            showToast("Geocoding address...", "info");
+
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&q=${encodeURIComponent(query)}`);
+                const results = await res.json();
+
+                if (results && results.length > 0) {
+                    const first = results[0];
+                    const lat = parseFloat(first.lat);
+                    const lng = parseFloat(first.lon);
+
+                    document.getElementById('shopLat').value = lat;
+                    document.getElementById('shopLng').value = lng;
+                    document.getElementById('coordsText').textContent = `Geocoded: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+                    if (window.map) window.map.setView([lat, lng], 13);
+                    showToast("Address mapped successfully!", "success");
+                } else {
+                    showToast("Address not found. Tap directly on map.", "error");
+                }
+            } catch (err) {
+                showToast("Geocoding service busy. Tap directly on map.", "error");
+            }
+        };
+
+        window.openAddModal = function() {
+            const center = window.map ? window.map.getCenter() : { lat: 39.8283, lng: -98.5795 };
+            window.openAddModalWithCoords(center.lat, center.lng, "");
+        };
+
+        window.openAddModalWithCoords = function(lat, lng, defaultAddress = "") {
+            document.getElementById('shopForm').reset();
+            document.getElementById('shopId').value = 'shop_' + Date.now();
+            document.getElementById('shopLat').value = lat;
+            document.getElementById('shopLng').value = lng;
+            document.getElementById('shopAddressQuery').value = defaultAddress;
+            document.getElementById('coordsText').textContent = `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            document.getElementById('formAuthorName').textContent = window.currentUser.name;
+
+            window.selectedFormTags.clear();
+            document.querySelectorAll('.form-tag-pill').forEach(btn => {
+                btn.className = "form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition";
+            });
+
+            window.setRating(5.0);
+            showModal('shopModal');
+        };
+
+        window.handleSaveShop = async function(e) {
+            e.preventDefault();
+
+            const id = document.getElementById('shopId').value;
+            const name = document.getElementById('shopName').value.trim();
+            const addressQuery = document.getElementById('shopAddressQuery').value.trim();
+            const lat = parseFloat(document.getElementById('shopLat').value) || 39.8283;
+            const lng = parseFloat(document.getElementById('shopLng').value) || -98.5795;
+            const whatIHad = document.getElementById('shopWhatIHad').value.trim();
+            const notes = document.getElementById('shopNotes').value.trim();
+
+            if (!name || !addressQuery) {
+                showToast("Please fill in required fields.", "error");
+                return;
+            }
+
+            const newReview = {
+                reviewId: 'rev_' + Date.now(),
+                userId: window.currentUser.uid,
+                userName: window.currentUser.name,
+                userAvatar: window.currentUser.avatar,
+                rating: window.currentFormRating,
+                whatIHad,
+                notes,
+                timestamp: Date.now()
+            };
+
+            const shopData = {
+                id,
+                name,
+                address: addressQuery,
+                cityState: addressQuery,
+                lat,
+                lng,
+                tags: Array.from(window.selectedFormTags),
+                createdByName: window.currentUser.name,
+                createdByUid: window.currentUser.uid,
+                reviews: [newReview]
+            };
+
+            await window.saveShopsToDb(shopData);
+            closeModal('shopModal');
+            showToast("New coffee shop saved!", "success");
+
+            if (window.tempClickMarker) {
+                window.map.removeLayer(window.tempClickMarker);
+                window.tempClickMarker = null;
+            }
+
+            window.focusShopOnMap(id);
+        };
+
+        window.openReviewModal = function(shopId) {
+            const shop = window.coffeeShops.find(s => s.id === shopId);
+            if (!shop) return;
+
+            document.getElementById('reviewForm').reset();
+            document.getElementById('reviewTargetShopId').value = shopId;
+            document.getElementById('reviewModalTitle').textContent = `Add Rating for ${shop.name}`;
+            window.setReviewRating(5.0);
+            showModal('reviewModal');
+        };
+
+        window.handleSaveReview = async function(e) {
+            e.preventDefault();
+
+            const shopId = document.getElementById('reviewTargetShopId').value;
+            const shop = window.coffeeShops.find(s => s.id === shopId);
+            if (!shop) return;
+
+            const whatIHad = document.getElementById('reviewWhatIHad').value.trim();
+            const notes = document.getElementById('reviewNotes').value.trim();
+
+            const reviewObj = {
+                reviewId: 'rev_' + Date.now(),
+                userId: window.currentUser.uid,
+                userName: window.currentUser.name,
+                userAvatar: window.currentUser.avatar,
+                rating: window.currentReviewRating,
+                whatIHad,
+                notes,
+                timestamp: Date.now()
+            };
+
+            const updatedReviews = shop.reviews ? [...shop.reviews, reviewObj] : [reviewObj];
+            const updatedShop = { ...shop, reviews: updatedReviews };
+
+            await window.saveShopsToDb(updatedShop);
+            closeModal('reviewModal');
+            showToast("Tasting note posted!", "success");
+        };
+
+        window.confirmDeleteShop = async function(shopId) {
+            if (confirm("Are you sure you want to remove this shop for everyone?")) {
+                await window.deleteShopFromDb(shopId);
+                showToast("Coffee shop deleted.", "info");
+            }
+        };
+
+        window.setRating = function(val) {
+            window.currentFormRating = val;
+            const stars = document.querySelectorAll('#interactiveRating i');
+            stars.forEach((s, idx) => {
+                s.className = idx < val ? "fa-solid fa-star text-amber-500" : "fa-regular fa-star text-espresso-300";
+            });
+            document.getElementById('ratingValText').textContent = `${val.toFixed(1)} / 5`;
+        };
+
+        window.setReviewRating = function(val) {
+            window.currentReviewRating = val;
+            const stars = document.querySelectorAll('#reviewInteractiveRating i');
+            stars.forEach((s, idx) => {
+                s.className = idx < val ? "fa-solid fa-star text-amber-500" : "fa-regular fa-star text-espresso-300";
+            });
+            document.getElementById('reviewRatingValText').textContent = `${val.toFixed(1)} / 5`;
+        };
+
+        window.toggleFormTag = function(tagName, btnEl) {
+            if (window.selectedFormTags.has(tagName)) {
+                window.selectedFormTags.delete(tagName);
+                btnEl.className = "form-tag-pill border border-espresso-200 bg-espresso-50 text-espresso-700 text-[11px] px-2.5 py-1 rounded-lg transition";
+            } else {
+                window.selectedFormTags.add(tagName);
+                btnEl.className = "form-tag-pill border border-amber-500 bg-amber-500 text-white text-[11px] px-2.5 py-1 rounded-lg transition shadow-xs";
+            }
+        };
+
+        window.toggleTagFilter = function(tag) {
+            window.activeTagFilter = tag;
+            document.querySelectorAll('.tag-filter-btn').forEach(btn => {
+                if (btn.dataset.tag === tag) {
+                    btn.className = "tag-filter-btn active-tag font-medium px-2.5 py-1 rounded-full bg-espresso-800 text-white shadow-xs shrink-0";
+                } else {
+                    btn.className = "tag-filter-btn font-medium px-2.5 py-1 rounded-full bg-white text-espresso-700 border border-espresso-200 hover:border-amber-400 shrink-0";
+                }
+            });
+            updateAppDisplay();
+        };
+
+        window.focusShopOnMap = function(shopId) {
+            const shop = window.coffeeShops.find(s => s.id === shopId);
+            if (!shop) return;
+
+            window.setMobileView('map');
+            window.map.setView([shop.lat, shop.lng], 14);
+
+            setTimeout(() => {
+                if (window.mapMarkers[shopId]) {
+                    window.mapMarkers[shopId].openPopup();
+                }
+            }, 250);
+        };
+
+        window.setMobileView = function(view) {
+            const mapP = document.getElementById('mapPanel');
+            const listP = document.getElementById('listPanel');
+            const mapBtn = document.getElementById('mobileTabMapBtn');
+            const listBtn = document.getElementById('mobileTabListBtn');
+
+            if (view === 'map') {
+                mapP.classList.remove('hidden');
+                listP.classList.add('hidden');
+                mapP.classList.add('w-full');
+                mapBtn.className = "px-3 py-1 rounded-lg bg-white text-espresso-900 shadow-xs";
+                listBtn.className = "px-3 py-1 rounded-lg text-espresso-700";
+                setTimeout(() => window.map && window.map.invalidateSize(), 100);
+            } else {
+                mapP.classList.add('hidden');
+                listP.classList.remove('hidden');
+                listP.classList.add('w-full');
+                listBtn.className = "px-3 py-1 rounded-lg bg-white text-espresso-900 shadow-xs";
+                mapBtn.className = "px-3 py-1 rounded-lg text-espresso-700";
+            }
+        };
+
+        window.toggleDropPinMode = function(forceState) {
+            if (typeof forceState === 'boolean') window.isDropPinMode = forceState;
+            else window.isDropPinMode = !window.isDropPinMode;
+
+            const banner = document.getElementById('dropPinBanner');
+            const btn = document.getElementById('dropPinBtn');
+            const label = document.getElementById('dropPinLabel');
+
+            if (window.isDropPinMode) {
+                banner.classList.remove('hidden');
+                btn.className = "bg-amber-500 text-white px-3.5 py-2 rounded-2xl shadow-xl border border-white/40 flex items-center space-x-2 text-xs font-medium transition active:scale-95";
+                label.textContent = "Cancel Pin";
+            } else {
+                banner.classList.add('hidden');
+                btn.className = "bg-espresso-800 hover:bg-espresso-900 text-white px-3.5 py-2 rounded-2xl shadow-xl border border-amber-500/40 flex items-center space-x-2 text-xs font-medium transition active:scale-95";
+                label.textContent = "Tap Map to Add";
+            }
+        };
+
+        window.openProfileModal = function() {
+            document.getElementById('profileNameInput').value = window.currentUser.name;
+            showModal('profileModal');
+        };
+
+        window.selectAvatar = function(emoji, btnEl) {
+            window.selectedAvatarEmoji = emoji;
+            document.querySelectorAll('.avatar-opt').forEach(b => {
+                b.className = "avatar-opt p-2 rounded-xl border border-espresso-200 hover:bg-espresso-50";
+            });
+            btnEl.className = "avatar-opt p-2 rounded-xl border-2 border-amber-500 bg-amber-50";
+        };
+
+        window.saveProfile = function() {
+            const name = document.getElementById('profileNameInput').value.trim() || 'Coffee Lover';
+            window.currentUser.name = name;
+            window.currentUser.avatar = window.selectedAvatarEmoji || '☕';
+
+            localStorage.setItem('bt_uname', name);
+            localStorage.setItem('bt_uavatar', window.currentUser.avatar);
+
+            updateProfileHeaderUI();
+            closeModal('profileModal');
+            showToast("Profile saved!", "success");
+        };
+
+        function updateProfileHeaderUI() {
+            document.getElementById('userAvatarDisplay').textContent = window.currentUser.avatar;
+            document.getElementById('userNameDisplay').textContent = window.currentUser.name;
+        }
+
+        function updateHeaderStats() {
+            document.getElementById('headerShopCount').textContent = window.coffeeShops.length;
+            let totalRev = 0;
+            window.coffeeShops.forEach(s => totalRev += (s.reviews ? s.reviews.length : 0));
+            document.getElementById('headerReviewCount').textContent = totalRev;
+        }
+
+        function updateStateFilterDropdown() {
+            const select = document.getElementById('stateSelect');
+            const currentVal = select.value;
+
+            const states = new Set();
+            window.coffeeShops.forEach(s => {
+                const parts = s.cityState ? s.cityState.split(',') : [];
+                if (parts.length > 1) {
+                    states.add(parts[parts.length - 1].trim().toUpperCase());
+                }
+            });
+
+            select.innerHTML = '<option value="ALL">All States</option>';
+            Array.from(states).sort().forEach(st => {
+                select.innerHTML += `<option value="${st}">${st}</option>`;
+            });
+
+            select.value = currentVal;
+        }
+
+        window.getUserLocation = function() {
+            if (!navigator.geolocation) {
+                showToast("Geolocation not supported on this device.", "error");
+                return;
+            }
+
+            showToast("Locating current position...", "info");
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    window.map.setView([latitude, longitude], 13);
+                    showToast("Centered map on GPS position!", "success");
+                },
+                () => showToast("Unable to acquire GPS position.", "error"),
+                { timeout: 8000 }
+            );
+        };
+
+        function showModal(id) {
+            const el = document.getElementById(id);
+            el.classList.remove('hidden');
+            setTimeout(() => {
+                el.classList.add('opacity-100');
+                if (el.firstElementChild) el.firstElementChild.classList.replace('scale-95', 'scale-100');
+            }, 10);
+        }
+
+        window.closeModal = function(id) {
+            const el = document.getElementById(id);
+            el.classList.remove('opacity-100');
+            if (el.firstElementChild) el.firstElementChild.classList.replace('scale-100', 'scale-95');
+            setTimeout(() => el.classList.add('hidden'), 200);
+        };
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            let bgClass = "bg-espresso-900 text-white border-amber-500";
+            let icon = "fa-info-circle text-amber-400";
+
+            if (type === 'success') {
+                bgClass = "bg-emerald-900 text-emerald-100 border-emerald-500";
+                icon = "fa-circle-check text-emerald-400";
+            } else if (type === 'error') {
+                bgClass = "bg-red-900 text-red-100 border-red-500";
+                icon = "fa-circle-xmark text-red-400";
+            }
+
+            toast.className = `${bgClass} border-l-4 p-3 rounded-2xl shadow-xl text-xs font-medium flex items-center space-x-2 transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(msg)}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
